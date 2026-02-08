@@ -1,20 +1,19 @@
 package com.pingyu.codehubbackend.config;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
  * 智码 - AI 核心配置类
- * 作用：注入“灵魂”，构建具备统一“人设”和“能力”的 ChatClient
+ * 作用：注入“灵魂”(Prompt) 和 “海马体”(Memory)
  */
 @Configuration
 public class ChatConfig {
 
-    /**
-     * 定义 System Prompt (人设)
-     * 这里的文字决定了 AI 说话的语气和思考方式
-     */
     private static final String SYSTEM_PROMPT = """
             你是由 PingYu 开发的 '智码 (CodeHub)'，你是用户的**“结对编程伙伴”**和**“技术侦探”**。
             
@@ -33,12 +32,25 @@ public class ChatConfig {
             - 禁止伪造不存在的依赖版本。
             """;
 
+    /**
+     * 1. 配置海马体 (ChatMemory)
+     * 这里使用 InMemoryChatMemory，重启项目后记忆会清空，适合开发阶段。
+     */
     @Bean
-    public ChatClient chatClient(ChatClient.Builder builder) {
-        // 使用 builder 构建一个全局通用的 ChatClient
-        // defaultSystem: 设置默认的系统提示词（植入灵魂）
+    public ChatMemory chatMemory() {
+        return new InMemoryChatMemory();
+    }
+
+    /**
+     * 2. 构建带记忆的 ChatClient
+     */
+    @Bean
+    public ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory) {
         return builder
                 .defaultSystem(SYSTEM_PROMPT)
+                // 核心动作：注入 MessageChatMemoryAdvisor
+                // 这就是让 AI 记住上下文的关键拦截器
+                .defaultAdvisors(new MessageChatMemoryAdvisor(chatMemory))
                 .build();
     }
 }

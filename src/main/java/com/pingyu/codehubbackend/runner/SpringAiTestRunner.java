@@ -6,30 +6,50 @@ import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 
+import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
+
 @Component
 public class SpringAiTestRunner implements CommandLineRunner {
 
-    // 注意：这里注入的不再是 ChatModel，而是我们刚配置好的 ChatClient
     @Resource
     private ChatClient chatClient;
 
     @Override
     public void run(String... args) throws Exception {
-        System.out.println("====== 正在测试 AI 模型连接 (ChatClient 模式) ======");
+        System.out.println("====== 正在测试 AI 多轮对话记忆 (Memory Test) ======");
+
+        // 定义一个固定的会话 ID，模拟同一个用户的连续对话
+        String testChatId = "test-session-1001";
 
         try {
-            // 测试能否触发“侦探”人设
-            // 我们故意写一个稍微有点问题的 Prompt，看它怎么回
-            String promptText = "嘿，智码，我最近写代码写得很烦，而且我觉得 Java 的 Date 类挺好用的，为啥非要换？";
+            // --- 第 1 轮对话 ---
+            System.out.println(">>> 萍雨 (Round 1): 我现在的 UserController.java 里有个空指针异常，好像是 UserService 没注入。");
 
-            String response = chatClient.prompt()
-                    .user(promptText)
+            String response1 = chatClient.prompt()
+                    .user("我现在的 UserController.java 里有个空指针异常，好像是 UserService 没注入。")
+                    // 核心动作：传入会话 ID，告诉 AI 这是 "test-session-1001" 的记忆
+                    .advisors(a -> a.param(CHAT_MEMORY_CONVERSATION_ID_KEY, testChatId))
                     .call()
                     .content();
 
-            System.out.println("====== AI 响应成功 ======");
-            System.out.println(response);
-            System.out.println("==========================");
+            System.out.println(">>> 智码 (Round 1): \n" + response1);
+            System.out.println("--------------------------------------------------");
+
+            // --- 第 2 轮对话 ---
+            // 注意：我这里没有再提 UserController 或空指针，直接问 "帮我写代码"
+            // 如果 AI 能给出 UserController 的修复代码，说明它记住了 Round 1
+            System.out.println(">>> 萍雨 (Round 2): 既然你分析得对，那就直接帮我把修复后的代码写出来吧！");
+
+            String response2 = chatClient.prompt()
+                    .user("既然你分析得对，那就直接帮我把修复后的代码写出来吧！")
+                    // 核心动作：再次传入相同的会话 ID
+                    .advisors(a -> a.param(CHAT_MEMORY_CONVERSATION_ID_KEY, testChatId))
+                    .call()
+                    .content();
+
+            System.out.println(">>> 智码 (Round 2): \n" + response2);
+            System.out.println("====== 测试结束 ======");
+
         } catch (Exception e) {
             System.err.println("====== AI 连接失败 ======");
             e.printStackTrace();
