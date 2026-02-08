@@ -13,7 +13,7 @@ import java.util.function.Function;
  * 智码 - 工具功能冒烟测试
  * 目标：不经过 AI，直接调用 Java 函数，验证读取文件的逻辑是否正常
  */
-@Component
+//@Component
 public class ToolFunctionTestRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ToolFunctionTestRunner.class);

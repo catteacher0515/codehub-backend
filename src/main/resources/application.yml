@@ -9,7 +9,7 @@ spring:
 
   # =======================================================
   # 1. 数据库配置 (PostgreSQL + PGVector)
-  # 注意：如果不使用 RAG (向量检索) 功能，这部分可以先注释掉，否则启动会报错连接不上数据库
+  # 注意：如果不使用 RAG (向量检索) 功能，这部分可以先注释掉
   # =======================================================
   #  datasource:
   #    driver-class-name: org.postgresql.Driver
@@ -18,7 +18,7 @@ spring:
   #    password: password
 
   # =======================================================
-  # 2. Spring AI 配置 (阿里云百炼 DashScope)
+  # 2. Spring AI 配置 (核心大脑)
   # =======================================================
   ai:
     dashscope:
@@ -26,14 +26,38 @@ spring:
       chat:
         options:
           model: qwen-plus # 推荐使用 qwen-plus 或 qwen-max
-      # 如果暂时还没装好向量数据库，建议把 embedding 和 vectorstore 先设为 false 或注释掉
+      # 开启 Embedding 能力，用于 RAG
       embedding:
         enabled: true
 
+    # -----------------------------------------------------
+    # [新增] MCP 协议配置 (万能插槽)
+    # -----------------------------------------------------
+    mcp:
+      client:
+        enabled: true
+#        stdio:
+#          servers:
+#            fs-server:
+#              # 🔴 核心动作 1：跳过 cmd 和 npx，直接动用 node 大脑
+#              command: "node"
+#              args:
+#                # 🔴 核心动作 2：直接指向工具的 dist/index.js
+#                # 再次提醒：Windows 路径在 YAML 里必须双斜杠 \\
+#                - "C:\\dev\\nodejs\\node_global\\node_modules\\@modelcontextprotocol\\server-filesystem\\dist\\index.js"
+#
+#                # 🔴 核心动作 3：工具所需的参数（当前目录）
+#                - "."
+
+    # -----------------------------------------------------
+    # 向量库配置
+    # 注意：我们之前的实战用的是 SimpleVectorStore (内存版)，
+    # 如果你没装 PGVector，下面这段建议先注释掉，否则可能会报错连接不上数据库
+    # -----------------------------------------------------
     vectorstore:
       pgvector:
         initialize-schema: true
-        dimensions: 1536 # qwen-text-embedding-v1 的维度通常是 1536
+        dimensions: 1536
         index-type: HNSW
         distance-type: COSINE_DISTANCE
 
@@ -69,8 +93,8 @@ knife4j:
 # =======================================================
 logging:
   level:
-#    root: INFO                             # 根级别保持 INFO，避免刷屏
-#    com.pingyu.codehubbackend: DEBUG       # 你的项目包名，开启 DEBUG 以观察自己的 Bean
-    org.springframework.ai: DEBUG          # 重点：开启 Spring AI 的调试日志
+    #    root: INFO                             # 根级别保持 INFO，避免刷屏
+    #    com.pingyu.codehubbackend: DEBUG       # 你的项目包名，开启 DEBUG 以观察自己的 Bean
+    org.springframework.ai: DEBUG          # 重点：开启 Spring AI 的调试日志，观察 Token 和工具调用
 #    org.springframework.beans: DEBUG       # 重点：观察 Bean 的依赖注入和创建顺序
 #    org.springframework.web: INFO

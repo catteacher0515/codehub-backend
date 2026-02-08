@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
  * 智码 - 工具集成测试 (Tool Integration Test)
  * 目标：验证 AI 能否听懂人话，自动调用 readFileTool
  */
-@Component
+//@Component
 public class ToolIntegrationTestRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ToolIntegrationTestRunner.class);
