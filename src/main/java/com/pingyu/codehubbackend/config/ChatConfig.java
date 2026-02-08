@@ -52,16 +52,15 @@ public class ChatConfig {
     @Bean
     public ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory, VectorStore vectorStore) {
         return builder
-                .defaultSystem(SYSTEM_PROMPT)
+                .defaultSystem(SYSTEM_PROMPT) // 保持之前的人设
                 .defaultAdvisors(
                         new MessageChatMemoryAdvisor(chatMemory),
-
-                        // 👇 核心动作：植入自定义 Prompt 模板
-                        // 参数1: 向量库
-                        // 参数2: 检索请求 (Top 4)
-                        // 参数3: 我们刚才定义的“严厉模板”
+                        // 保持 RAG 能力 (注意：RAG 和 Tool 可以共存！)
                         new QuestionAnswerAdvisor(vectorStore, SearchRequest.builder().build(), RAG_PROMPT_TEMPLATE)
                 )
+                // 👇【核心动作】挂载工具
+                // 参数字符串必须与 ToolsConfig 中注册的 @Bean 方法名一致
+                .defaultFunctions("readFileTool")
                 .build();
     }
 }

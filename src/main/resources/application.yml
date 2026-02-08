@@ -67,10 +67,10 @@ knife4j:
 # =======================================================
 # 5. 日志配置 (侦探的放大镜)
 # =======================================================
-#logging:
-#  level:
+logging:
+  level:
 #    root: INFO                             # 根级别保持 INFO，避免刷屏
 #    com.pingyu.codehubbackend: DEBUG       # 你的项目包名，开启 DEBUG 以观察自己的 Bean
-#    org.springframework.ai: DEBUG          # 重点：开启 Spring AI 的调试日志
+    org.springframework.ai: DEBUG          # 重点：开启 Spring AI 的调试日志
 #    org.springframework.beans: DEBUG       # 重点：观察 Bean 的依赖注入和创建顺序
 #    org.springframework.web: INFO
