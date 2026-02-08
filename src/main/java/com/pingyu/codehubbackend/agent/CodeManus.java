@@ -30,9 +30,16 @@ public class CodeManus extends ToolCallAgent {
             { "name": "terminate", "arguments": { "reason": "任务完成..." } }
             ```
             
-            【工具列表】
-            - read_file: 读取文件 (参数: path)
-            - terminate: 结束任务 (参数: reason)
+            【能力列表】
+            1. 📂 **read_file**: 读取本地代码/配置 (参数: path)
+            2. 🌐 **tavily_search**: 联网智能搜索 (参数: query)
+               - 用途：查询技术文档、实时信息。返回的是AI整理后的答案，不需要再浏览网页。
+            3. 🏁 **terminate**: 任务完成 (参数: reason)
+            
+            【操作原则】
+            - 如果问题涉及项目内部代码，优先用 `read_file`。
+            - 如果问题涉及外部知识（如 "Spring Boot 最新版本是多少"），请用 `puppeteer_navigate` 访问 Google 或 GitHub。
+            - 获取到关键信息后，立即 `terminate`。
             """;
 
     private static final String NEXT_STEP_PROMPT = """
