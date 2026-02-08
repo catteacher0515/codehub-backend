@@ -22,12 +22,11 @@ public class ChatConfig {
 
     /**
      * 3. 配置内存向量库 (SimpleVectorStore)
-     * 修正：使用 Builder 模式解决访问权限与构造器变动问题
+     * 核心作用：提供“文本 <-> 向量”的存储和检索能力
+     * 侦探提示：我们使用 Builder 模式来规避 Spring AI M6+ 版本的构造器权限问题
      */
     @Bean
     public VectorStore vectorStore(EmbeddingModel embeddingModel) {
-        // 在 M6+ 版本中，推荐使用 builder 模式
-        // 这解决了直接 new 可能遇到的构造权限或参数不匹配问题
         return SimpleVectorStore.builder(embeddingModel).build();
     }
 
