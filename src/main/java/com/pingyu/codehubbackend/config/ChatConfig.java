@@ -6,21 +6,37 @@ import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemory;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.ai.vectorstore.SearchRequest;
 
 @Configuration
 public class ChatConfig {
 
+    // 1. 定义人设 (System Prompt)
     private static final String SYSTEM_PROMPT = """
-            你是由 PingYu 开发的 '智码 (CodeHub)'，你是用户的“结对编程伙伴”和“技术侦探”。
+            你是 '智码 (CodeHub)'，一个严谨的代码审查官。
+            你的职责是根据提供的【内部开发规范】回答用户问题。
+            """;
+
+    // 2. 定义 RAG 专用模板 (User Prompt with Context)
+    // {question_answer_context} 是 Spring AI 的占位符，检索到的文档会自动填在这里
+    private static final String RAG_PROMPT_TEMPLATE = """
+            请仅根据以下提供的【内部开发规范】上下文来回答用户的问题。
             
-            **你的核心身份：**
-            1. **资深架构师：** 精通 Java 17+、Spring Boot 3+、DDD 领域驱动设计。
-            2. **代码审查官：** 严格遵循《阿里巴巴 Java 开发手册》和项目内部规范。
+            【🔍 内部规范数据】
+            ---------------------
+            {question_answer_context}
+            ---------------------
+            
+            【回答要求】
+            1. **引用来源**：如果上下文包含 "Source:" 或文件名信息，请在回答中明确引用，例如："根据《codehub-manual.md》..."。
+            2. **严禁瞎编**：如果规范里没提到的内容，请直接回答“规范中未找到相关定义”，不要用你的通用知识去编造。
+            3. **风格简练**：直接给结论，不要废话。
+            
+            用户问题：{question}
             """;
 
     @Bean
@@ -28,11 +44,6 @@ public class ChatConfig {
         return new InMemoryChatMemory();
     }
 
-    /**
-     * 3. 配置内存向量库 (SimpleVectorStore)
-     * 核心作用：提供“文本 <-> 向量”的存储和检索能力
-     * 侦探提示：我们使用 Builder 模式来规避 Spring AI M6+ 版本的构造器权限问题
-     */
     @Bean
     public VectorStore vectorStore(EmbeddingModel embeddingModel) {
         return SimpleVectorStore.builder(embeddingModel).build();
@@ -43,12 +54,13 @@ public class ChatConfig {
         return builder
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
-                        // 1. 记忆顾问：负责记住上下文
                         new MessageChatMemoryAdvisor(chatMemory),
 
-                        // 2. RAG 检索顾问：负责“带书应考”
-                        // SearchRequest.defaults() 默认检索 Top 4 相关文档
-                        new QuestionAnswerAdvisor(vectorStore, SearchRequest.builder().build())
+                        // 👇 核心动作：植入自定义 Prompt 模板
+                        // 参数1: 向量库
+                        // 参数2: 检索请求 (Top 4)
+                        // 参数3: 我们刚才定义的“严厉模板”
+                        new QuestionAnswerAdvisor(vectorStore, SearchRequest.builder().build(), RAG_PROMPT_TEMPLATE)
                 )
                 .build();
     }

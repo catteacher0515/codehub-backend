@@ -20,7 +20,7 @@ import java.util.Map;
  * 智码 - RAG 进阶测试：精准搜证 (Metadata Filtering)
  * 目标：验证“只看特定文件”的过滤能力
  */
-@Component
+//@Component
 public class FilterSearchTestRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(FilterSearchTestRunner.class);
