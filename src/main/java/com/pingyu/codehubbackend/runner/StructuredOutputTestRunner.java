@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
 
-@Component
+//@Component
 public class StructuredOutputTestRunner implements CommandLineRunner {
 
     @Resource

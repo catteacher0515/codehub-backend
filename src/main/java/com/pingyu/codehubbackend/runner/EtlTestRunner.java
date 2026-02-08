@@ -16,7 +16,7 @@ import java.util.List;
  * 智码 - ETL (Extract, Transform, Load) 测试
  * 作用：模拟从文件中读取数据，并将其切割成小块 (Chunk)
  */
-@Component
+//@Component
 public class EtlTestRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(EtlTestRunner.class);

@@ -11,11 +11,11 @@ spring:
   # 1. 数据库配置 (PostgreSQL + PGVector)
   # 注意：如果不使用 RAG (向量检索) 功能，这部分可以先注释掉，否则启动会报错连接不上数据库
   # =======================================================
-#  datasource:
-#    driver-class-name: org.postgresql.Driver
-#    url: jdbc:postgresql://localhost:5432/codehub_vector
-#    username: postgres
-#    password: password
+  #  datasource:
+  #    driver-class-name: org.postgresql.Driver
+  #    url: jdbc:postgresql://localhost:5432/codehub_vector
+  #    username: postgres
+  #    password: password
 
   # =======================================================
   # 2. Spring AI 配置 (阿里云百炼 DashScope)
@@ -45,7 +45,7 @@ spring:
     time-zone: GMT+8
 
 # =======================================================
-# 4. Knife4j 接口文档配置 (根据文档补充)
+# 4. Knife4j 接口文档配置
 # =======================================================
 springdoc:
   swagger-ui:
@@ -57,10 +57,20 @@ springdoc:
   group-configs:
     - group: 'default'
       paths-to-match: '/**'
-      # 注意：这里要换成你实际的 Controller 包路径，否则扫描不到接口
       packages-to-scan: com.pingyu.codehub.backend.controller
 
 knife4j:
   enable: true
   setting:
     language: zh_cn
+
+# =======================================================
+# 5. 日志配置 (侦探的放大镜)
+# =======================================================
+#logging:
+#  level:
+#    root: INFO                             # 根级别保持 INFO，避免刷屏
+#    com.pingyu.codehubbackend: DEBUG       # 你的项目包名，开启 DEBUG 以观察自己的 Bean
+#    org.springframework.ai: DEBUG          # 重点：开启 Spring AI 的调试日志
+#    org.springframework.beans: DEBUG       # 重点：观察 Bean 的依赖注入和创建顺序
+#    org.springframework.web: INFO

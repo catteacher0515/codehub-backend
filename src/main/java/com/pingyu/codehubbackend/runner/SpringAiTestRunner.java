@@ -8,7 +8,7 @@ import jakarta.annotation.Resource;
 
 import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
 
-@Component
+//@Component
 public class SpringAiTestRunner implements CommandLineRunner {
 
     @Resource
