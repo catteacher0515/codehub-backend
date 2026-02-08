@@ -16,7 +16,7 @@ import java.util.List;
  * 智码 - RAG 进阶测试：元数据 (Metadata) 管理
  * 目标：验证给文档打标签后，切片是否能自动继承这些标签
  */
-@Component
+//@Component
 public class MetadataEtlTestRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(MetadataEtlTestRunner.class);
