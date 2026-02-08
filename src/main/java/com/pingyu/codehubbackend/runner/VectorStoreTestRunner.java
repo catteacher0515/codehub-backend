@@ -17,7 +17,7 @@ import java.util.List;
  * 智码 - 向量库功能冒烟测试
  * 流程：ETL (读取+切割) -> Store (向量化入库) -> Search (语义检索)
  */
-@Component
+//@Component
 public class VectorStoreTestRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(VectorStoreTestRunner.class);

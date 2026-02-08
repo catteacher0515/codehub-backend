@@ -16,7 +16,7 @@ import java.util.List;
 
 import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
 
-@Component
+//@Component
 public class RagTestRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(RagTestRunner.class);
