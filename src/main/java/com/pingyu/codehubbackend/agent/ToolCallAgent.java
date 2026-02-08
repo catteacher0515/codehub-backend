@@ -2,6 +2,7 @@ package com.pingyu.codehubbackend.agent;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pingyu.codehubbackend.agent.model.AgentState;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * 工具调用代理 (The Hands) - 修复异常拦截版
+ */
 @EqualsAndHashCode(callSuper = true)
 @Data
 @Slf4j
@@ -75,6 +79,12 @@ public class ToolCallAgent extends ReActAgent {
             }
 
         } catch (Exception e) {
+            // 🚨🚨🚨 核心修复：如果是终止信号，不要拦截，直接往上抛！ 🚨🚨🚨
+            if (isTerminationException(e)) {
+                throw (RuntimeException) e;
+            }
+
+            // 只有真正的错误才打印日志并吞掉
             log.error("思考过程出错", e);
             try { Thread.sleep(1000); } catch (InterruptedException ex) {}
             return false;
@@ -83,6 +93,8 @@ public class ToolCallAgent extends ReActAgent {
 
     @Override
     public String act() {
+        if (toolCallChatResponse == null) return "无需执行";
+
         AssistantMessage output = toolCallChatResponse.getResult().getOutput();
         List<AssistantMessage.ToolCall> toolCalls = output.getToolCalls();
         String textContent = output.getText();
@@ -103,7 +115,6 @@ public class ToolCallAgent extends ReActAgent {
 
         for (AssistantMessage.ToolCall toolCall : toolCalls) {
             try {
-                // 🚨 模糊匹配逻辑：防止前缀不一致
                 String targetName = toolCall.name();
                 Optional<FunctionCallback> matchedTool = Arrays.stream(availableTools)
                         .filter(t -> t.getName().contains(targetName) || targetName.contains(t.getName()))
@@ -111,9 +122,20 @@ public class ToolCallAgent extends ReActAgent {
 
                 String resultJson;
                 if (matchedTool.isPresent()) {
-                    log.info("✅ 命中工具: [{}] (原始请求: {})", matchedTool.get().getName(), targetName);
-                    // 修正参数格式问题（如果 AI 输出了 tool_input 这种嵌套结构，这里可能需要提取，但暂且信任它会遵守新 Prompt）
+                    String realName = matchedTool.get().getName();
+                    log.info("✅ 命中工具: [{}] (原始请求: {})", realName, targetName);
+
+                    // 执行工具
                     resultJson = matchedTool.get().call(toolCall.arguments());
+
+                    // 检查返回值是否包含终止信号 (针对义肢模式或未抛异常的情况)
+                    if ("terminate".equals(realName) || "TERMINATE_SIGNAL".equals(resultJson) || "TERMINATE_NOW".equals(resultJson)) {
+                        log.info("🛑 [优雅退场] 捕获到终止信号，CodeManus 任务完成。");
+                        this.setState(AgentState.FINISHED);
+                        // 抛出异常以打断流程
+                        throw new RuntimeException("TERMINATE_AGENT");
+                    }
+
                 } else {
                     log.warn("❌ 未找到工具: {}", targetName);
                     String allToolNames = Arrays.stream(availableTools).map(FunctionCallback::getName).collect(Collectors.joining(", "));
@@ -127,6 +149,11 @@ public class ToolCallAgent extends ReActAgent {
                 }
 
             } catch (Exception e) {
+                // 🚨🚨🚨 同样，如果是终止信号，往上抛 🚨🚨🚨
+                if (isTerminationException(e)) {
+                    throw (RuntimeException) e;
+                }
+
                 log.error("❌ 工具执行异常", e);
                 executionResults.add("Error: " + e.getMessage());
             }
@@ -135,7 +162,6 @@ public class ToolCallAgent extends ReActAgent {
         getMessageList().add(output);
 
         if (isProstheticMode) {
-            // 伪装成系统通知
             String systemReport = "【系统执行报告】\n" + String.join("\n", executionResults);
             getMessageList().add(new UserMessage(systemReport));
         } else {
@@ -147,25 +173,27 @@ public class ToolCallAgent extends ReActAgent {
         return String.join("\n", executionResults);
     }
 
-    /**
-     * 🕵️ 升级版嗅探：兼容多种关键词
-     */
+    // 辅助方法：判断是否为终止信号异常
+    private boolean isTerminationException(Throwable e) {
+        if (e == null) return false;
+        // 检查消息内容
+        if (e.getMessage() != null && e.getMessage().contains("TERMINATE_AGENT")) return true;
+        // 递归检查 Cause
+        return isTerminationException(e.getCause());
+    }
+
+    // ... (isFakeToolCall 和 parseFakeToolCalls 保持不变，请直接复制之前的即可) ...
     private boolean isFakeToolCall(String text) {
         if (text == null) return false;
         String trimmed = text.trim();
-        // 只要包含任何一个特征词，且看起来像 JSON，就判定为真
         boolean hasKey = trimmed.contains("\"name\"") || trimmed.contains("\"tool\"") || trimmed.contains("\"function\"");
         boolean hasJsonStruct = trimmed.startsWith("{") || trimmed.contains("```json");
         return hasKey && hasJsonStruct;
     }
 
-    /**
-     * 🕵️ 升级版解析：方言翻译器
-     */
     private List<AssistantMessage.ToolCall> parseFakeToolCalls(String text) {
         List<AssistantMessage.ToolCall> fakeCalls = new ArrayList<>();
         try {
-            // 提取 JSON 字符串 (逻辑不变)
             String jsonString = text;
             if (jsonString.contains("```json")) {
                 jsonString = jsonString.substring(jsonString.indexOf("```json") + 7);
@@ -180,29 +208,19 @@ public class ToolCallAgent extends ReActAgent {
             if (firstBrace != -1 && lastBrace != -1) {
                 jsonString = jsonString.substring(firstBrace, lastBrace + 1);
             }
-
             JsonNode node = objectMapper.readTree(jsonString);
-
-            // 🚨 核心兼容逻辑：不管它说的是普通话还是方言，都转成标准语
             String name = "unknown";
             if (node.has("name")) name = node.get("name").asText();
-            else if (node.has("tool")) name = node.get("tool").asText(); // 兼容 "tool"
-
+            else if (node.has("tool")) name = node.get("tool").asText();
             String args = "{}";
             if (node.has("arguments")) args = node.get("arguments").toString();
-            else if (node.has("tool_input")) args = node.get("tool_input").toString(); // 兼容 "tool_input"
-                // 甚至兼容 hallucinated "parameters"
+            else if (node.has("tool_input")) args = node.get("tool_input").toString();
             else if (node.has("parameters")) args = node.get("parameters").toString();
-
-            // 修正参数名 hallucination (例如 file_path -> path)
-            // 这是一个简单的字符串替换 hack，但很有效
             if (name.contains("read_file") && args.contains("file_path")) {
                 args = args.replace("file_path", "path");
             }
-
             fakeCalls.add(new AssistantMessage.ToolCall("manual_id_" + System.currentTimeMillis(), "function", name, args));
             log.info("🕵️ [兼容模式] 解析指令: {} -> {}", name, args);
-
         } catch (Exception e) {
             log.warn("❌ 解析伪造 ToolCall 失败: {}", e.getMessage());
         }

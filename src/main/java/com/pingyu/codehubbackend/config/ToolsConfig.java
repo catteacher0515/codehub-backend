@@ -6,7 +6,6 @@ import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.ServerParameters;
 import io.modelcontextprotocol.client.transport.StdioClientTransport;
-// 🟢 修复点 1: 导入 McpSchema (所有请求/响应类都在这)
 import io.modelcontextprotocol.spec.McpSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,21 +40,15 @@ public class ToolsConfig {
     @Primary
     public ToolCallbackProvider mcpToolCallbackProvider(McpSyncClient filesystemClient) {
         return () -> {
-            log.info("📦 [ToolsConfig] 正在手动装配 read_file 工具...");
+            log.info("📦 [ToolsConfig] 正在手动装配工具箱...");
 
+            // 工具 1: read_file
             ToolCallback readFileTool = new ToolCallback() {
                 private final ObjectMapper mapper = new ObjectMapper();
-
                 @Override
-                public String getName() {
-                    return "read_file";
-                }
-
+                public String getName() { return "read_file"; }
                 @Override
-                public String getDescription() {
-                    return "Reads a file from the local filesystem";
-                }
-
+                public String getDescription() { return "Reads a file from the local filesystem"; }
                 @Override
                 public ToolDefinition getToolDefinition() {
                     return ToolDefinition.builder()
@@ -64,37 +57,52 @@ public class ToolsConfig {
                             .inputSchema("{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"The relative path to the file\"}},\"required\":[\"path\"]}")
                             .build();
                 }
-
                 @Override
                 public String call(String jsonArgs) {
                     try {
-                        log.info("⚡ [ManualBridge] 收到调用请求: read_file({})", jsonArgs);
+                        log.info("⚡ [ToolsConfig] 收到调用: read_file({})", jsonArgs);
                         Map<String, Object> args = mapper.readValue(jsonArgs, new TypeReference<>() {});
-
-                        // 🟢 修复点 2: 使用 McpSchema.CallToolRequest
                         McpSchema.CallToolRequest request = new McpSchema.CallToolRequest("read_file", args);
                         McpSchema.CallToolResult result = filesystemClient.callTool(request);
-
-                        // 🟢 修复点 3: 正确提取内容 (result.content() 是一个 List)
-                        // 我们遍历列表，找到 TextContent 并拼接起来
                         StringBuilder contentBuilder = new StringBuilder();
                         for (Object contentItem : result.content()) {
                             if (contentItem instanceof McpSchema.TextContent textContent) {
                                 contentBuilder.append(textContent.text());
                             }
                         }
-
                         String content = contentBuilder.toString();
-                        log.info("✅ [ManualBridge] 执行成功，返回长度: {}", content.length());
+                        log.info("✅ [ToolsConfig] read_file 执行成功 (长度: {})", content.length());
                         return content;
-
                     } catch (Exception e) {
-                        log.error("❌ [ManualBridge] 执行失败", e);
-                        return "Error executing read_file: " + e.getMessage();
+                        log.error("❌ [ToolsConfig] read_file 失败", e);
+                        return "Error: " + e.getMessage();
                     }
                 }
             };
-            return new ToolCallback[] { readFileTool };
+
+            // 工具 2: terminate (信号弹版)
+            ToolCallback terminateTool = new ToolCallback() {
+                @Override
+                public String getName() { return "terminate"; }
+                @Override
+                public String getDescription() { return "Terminate the task when completed."; }
+                @Override
+                public ToolDefinition getToolDefinition() {
+                    return ToolDefinition.builder()
+                            .name("terminate")
+                            .description("Call this tool IMMEDIATELY when you have found the answer.")
+                            .inputSchema("{\"type\":\"object\",\"properties\":{\"reason\":{\"type\":\"string\",\"description\":\"reason\"}},\"required\":[\"reason\"]}")
+                            .build();
+                }
+                @Override
+                public String call(String jsonArgs) {
+                    log.info("🏁 [ToolsConfig] 收到终止信号: terminate({})", jsonArgs);
+                    // 🚨 抛出特殊异常，强制中断 Spring AI 的执行流
+                    throw new RuntimeException("TERMINATE_AGENT");
+                }
+            };
+
+            return new ToolCallback[] { readFileTool, terminateTool };
         };
     }
 }

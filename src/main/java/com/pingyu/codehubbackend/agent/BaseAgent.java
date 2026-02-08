@@ -10,49 +10,27 @@ import org.springframework.ai.chat.messages.UserMessage;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 智能体基类 (The Body)
- * 职责：管理状态、记忆、执行循环 (Loop)
- * 对应文档：五、自主实现 Manus 智能体 - 1、开发基础 Agent 类
- */
 @Data
 @Slf4j
 public abstract class BaseAgent {
 
-    // 智能体名称
     private String name;
-    // 系统设定 (人设)
     private String systemPrompt;
-    // 下一步提示 (用于引导 AI 持续思考)
     private String nextStepPrompt;
-
-    // 当前状态
     private AgentState state = AgentState.IDLE;
-
-    // 记忆条 (上下文历史)
     private List<Message> messageList = new ArrayList<>();
-
-    // 循环控制
-    private int maxSteps = 10; // 最大防止死循环次数
+    private int maxSteps = 15;
     private int currentStep = 0;
-
-    // 大脑 (Spring AI ChatClient)
     private ChatClient chatClient;
 
-    /**
-     * 启动智能体 (主入口)
-     */
     public String run(String userPrompt) {
         if (this.state != AgentState.IDLE) {
             throw new RuntimeException("智能体正在忙，请稍后再试！当前状态: " + this.state);
         }
 
-        // 1. 初始化
         this.state = AgentState.RUNNING;
         this.currentStep = 0;
-        this.messageList.clear(); // 每次运行清空短期记忆
-
-        // 2. 注入用户任务
+        this.messageList.clear();
         this.messageList.add(new UserMessage(userPrompt));
 
         List<String> results = new ArrayList<>();
@@ -60,18 +38,21 @@ public abstract class BaseAgent {
         try {
             log.info("🚀 [{}] 启动任务: {}", this.name, userPrompt);
 
-            // 3. 进入 Agent Loop (执行循环)
             while (currentStep < maxSteps && state != AgentState.FINISHED) {
                 currentStep++;
                 log.info("🔄 Step {}/{}", currentStep, maxSteps);
 
-                // 执行单步逻辑 (由子类实现)
                 String stepResult = step();
+
+                // 兼容旧的字符串检测方式
+                if (stepResult != null && stepResult.contains("TERMINATE_NOW")) {
+                    this.state = AgentState.FINISHED;
+                    break;
+                }
 
                 results.add(String.format("步骤 %d: %s", currentStep, stepResult));
             }
 
-            // 4. 检查是否超时
             if (currentStep >= maxSteps) {
                 this.state = AgentState.FINISHED;
                 results.add("⚠️ 任务强制终止：已达到最大思考步数 " + maxSteps);
@@ -79,18 +60,35 @@ public abstract class BaseAgent {
 
             return String.join("\n", results);
 
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
+            // 🚨 专门捕获“信号弹”异常
+            // 检查异常信息是否包含我们的暗号（考虑到 Spring AI 可能会包装异常）
+            if (isTerminationException(e)) {
+                this.state = AgentState.FINISHED;
+                log.info("🛑 [BaseAgent] 捕获到终止信号，任务成功结束！");
+                results.add("🏁 任务达成，CodeManus 优雅退场。");
+                return String.join("\n", results);
+            }
+
+            // 真正的错误
             this.state = AgentState.ERROR;
             log.error("💥 智能体崩溃: ", e);
             return "执行出错: " + e.getMessage();
+        } catch (Exception e) {
+            this.state = AgentState.ERROR;
+            log.error("💥 智能体未知错误: ", e);
+            return "执行出错: " + e.getMessage();
         } finally {
-            // 归位
             this.state = AgentState.IDLE;
         }
     }
 
-    /**
-     * 单步执行逻辑 (核心抽象方法)
-     */
+    // 辅助方法：递归检查异常原因
+    private boolean isTerminationException(Throwable e) {
+        if (e == null) return false;
+        if ("TERMINATE_AGENT".equals(e.getMessage())) return true;
+        return isTerminationException(e.getCause());
+    }
+
     public abstract String step();
 }
