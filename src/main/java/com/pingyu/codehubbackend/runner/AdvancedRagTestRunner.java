@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 /**
  * 智码 - RAG 最佳实践测试：Prompt 增强与引用溯源
  */
-@Component
+//@Component
 public class AdvancedRagTestRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AdvancedRagTestRunner.class);
