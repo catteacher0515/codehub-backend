@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: codehub-backend
+    ports:
+      - "8125:8125"
+    environment:
+      # 激活 docker profile（如果需要针对 docker 环境的特殊配置，可以在 src/main/resources/application-docker.yml 中配置）
+      # 这里主要通过环境变量覆盖配置
+      - SPRING_PROFILES_ACTIVE=docker
+      - CODEHUB_DASH_SCOPE_KEY=${CODEHUB_DASH_SCOPE_KEY}
+      
+      # 数据库配置 - 覆盖 application.yml 中的默认配置
+      # 即使 application.yml 中被注释，Spring Boot 也会读取这些环境变量
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/codehub_vector
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+      - SPRING_DATASOURCE_DRIVER-CLASS-NAME=org.postgresql.Driver
+      
+      # 向量库配置 - 确保使用 PGVector
+      - SPRING_AI_VECTORSTORE_PGVECTOR_INITIALIZE-SCHEMA=true
+      
+      # MCP 配置 - 在 Docker 环境中默认禁用，因为路径不兼容
+      # 如果需要启用，请挂载 Node 环境和工具路径，并覆盖相应配置
+      - SPRING_AI_MCP_CLIENT_ENABLED=false
+      
+      # 日志配置
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_AI=INFO
+    depends_on:
+      - db
+    networks:
+      - codehub-net
+    restart: always
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: codehub-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=codehub_vector
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - codehub-net
+    restart: always
+
+volumes:
+  postgres_data:
+
+networks:
+  codehub-net:
+    driver: bridge
