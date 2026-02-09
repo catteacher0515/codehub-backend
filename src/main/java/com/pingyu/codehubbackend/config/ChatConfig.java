@@ -11,6 +11,7 @@ import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 @Configuration
 public class ChatConfig {
@@ -21,8 +22,7 @@ public class ChatConfig {
             你的职责是根据提供的【内部开发规范】回答用户问题。
             """;
 
-    // 2. 定义 RAG 专用模板 (User Prompt with Context)
-    // {question_answer_context} 是 Spring AI 的占位符，检索到的文档会自动填在这里
+    // 2. 定义 RAG 专用模板
     private static final String RAG_PROMPT_TEMPLATE = """
             请仅根据以下提供的【内部开发规范】上下文来回答用户的问题。
             
@@ -49,18 +49,27 @@ public class ChatConfig {
         return SimpleVectorStore.builder(embeddingModel).build();
     }
 
+    // --- 复杂客户端：带 RAG 和工具能力 (用于高级功能) ---
     @Bean
+    @Primary // 默认注入这个
     public ChatClient chatClient(ChatClient.Builder builder, ChatMemory chatMemory, VectorStore vectorStore) {
         return builder
-                .defaultSystem(SYSTEM_PROMPT) // 保持之前的人设
+                .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
                         new MessageChatMemoryAdvisor(chatMemory),
-                        // 保持 RAG 能力 (注意：RAG 和 Tool 可以共存！)
                         new QuestionAnswerAdvisor(vectorStore, SearchRequest.builder().build(), RAG_PROMPT_TEMPLATE)
                 )
-                // 👇【核心动作】挂载工具
-                // 参数字符串必须与 ToolsConfig 中注册的 @Bean 方法名一致
+                // 挂载工具 (注意：SimpleChatClient 不需要这个)
                 .defaultFunctions("readFileTool")
                 .build();
+    }
+
+    // --- ⭐ 新增：简单客户端 (用于页面 1：智码助手) ---
+    // 不带 RAG，不带工具，只做纯粹的对话
+    @Bean("simpleChatClient")
+    public ChatClient simpleChatClient(ChatClient.Builder builder) {
+        return builder
+                .defaultSystem("你是一个友好的 AI 编程助手，名字叫'智码助手'。请用简洁、专业的语言回答用户的编程问题。")
+                .build(); // 没有任何花哨的 Advisor 或 Function
     }
 }

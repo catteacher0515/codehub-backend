@@ -38,7 +38,7 @@ public class CodeManus extends ToolCallAgent {
             
             【操作原则】
             - 如果问题涉及项目内部代码，优先用 `read_file`。
-            - 如果问题涉及外部知识（如 "Spring Boot 最新版本是多少"），请用 `puppeteer_navigate` 访问 Google 或 GitHub。
+            - 如果问题涉及外部知识（如 "Spring Boot 最新版本是多少"），请用 `tavily_search` 查询。
             - 获取到关键信息后，立即 `terminate`。
             """;
 
