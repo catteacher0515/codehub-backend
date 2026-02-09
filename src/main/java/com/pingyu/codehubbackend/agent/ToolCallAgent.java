@@ -2,6 +2,7 @@ package com.pingyu.codehubbackend.agent;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pingyu.codehubbackend.agent.model.AgentEvent;
 import com.pingyu.codehubbackend.agent.model.AgentState;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -17,9 +18,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @EqualsAndHashCode(callSuper = true)
 @Data
@@ -34,9 +32,6 @@ public class ToolCallAgent extends ReActAgent {
         this.availableTools = availableTools;
         this.setChatClient(chatClient);
         log.info("🔧 [ToolCallAgent] 初始化完成，共加载 {} 个工具", availableTools.length);
-        if (availableTools.length > 0) {
-            Arrays.stream(availableTools).forEach(t -> log.info("   👉 可用工具: [{}]", t.getName()));
-        }
     }
 
     @Override
@@ -47,6 +42,8 @@ public class ToolCallAgent extends ReActAgent {
 
         try {
             log.info("🧠 CodeManus 正在大脑风暴 (Thinking)...");
+            // 📡 广播：正在思考
+            notify(AgentEvent.thinking("🧠 正在思考中..."));
 
             ChatResponse response = getChatClient().prompt()
                     .system(getSystemPrompt())
@@ -61,16 +58,17 @@ public class ToolCallAgent extends ReActAgent {
             String text = output.getText();
             List<AssistantMessage.ToolCall> toolCalls = output.getToolCalls();
 
-            // 打印思维链
+            // 📡 广播：思维链内容
             if (text != null && !text.isEmpty()) {
-                log.info("\n==================== 💭 [思维链 CoT] ====================\n{}\n========================================================", text.trim());
+                log.info("\n=== 💭 [CoT] ===\n{}\n================", text.trim());
+                notify(AgentEvent.thinking(text.trim()));
             }
 
             if (toolCalls != null && !toolCalls.isEmpty()) {
                 log.info("🛠️ [决策] 决定调用 {} 个工具", toolCalls.size());
                 return true;
             } else if (isFakeToolCall(text)) {
-                log.warn("⚠️ [义肢模式] 检测到文本指令，准备手动执行...");
+                log.warn("⚠️ [义肢模式] 检测到文本指令...");
                 return true;
             } else {
                 getMessageList().add(output);
@@ -80,6 +78,7 @@ public class ToolCallAgent extends ReActAgent {
         } catch (Exception e) {
             if (isTerminationException(e)) throw (RuntimeException) e;
             log.error("思考过程出错", e);
+            notify(AgentEvent.error("思考过程出错: " + e.getMessage()));
             try { Thread.sleep(1000); } catch (InterruptedException ex) {}
             return false;
         }
@@ -93,7 +92,6 @@ public class ToolCallAgent extends ReActAgent {
         String textContent = output.getText();
 
         boolean isProstheticMode = (toolCalls == null || toolCalls.isEmpty()) && isFakeToolCall(textContent);
-
         if (isProstheticMode) {
             toolCalls = parseFakeToolCalls(textContent);
         }
@@ -109,6 +107,11 @@ public class ToolCallAgent extends ReActAgent {
         for (AssistantMessage.ToolCall toolCall : toolCalls) {
             try {
                 String targetName = toolCall.name();
+                String args = toolCall.arguments();
+
+                // 📡 广播：准备调用工具
+                notify(AgentEvent.action(targetName, args));
+
                 Optional<FunctionCallback> matchedTool = Arrays.stream(availableTools)
                         .filter(t -> t.getName().contains(targetName) || targetName.contains(t.getName()))
                         .findFirst();
@@ -116,19 +119,34 @@ public class ToolCallAgent extends ReActAgent {
                 String resultJson;
                 if (matchedTool.isPresent()) {
                     String realName = matchedTool.get().getName();
-                    log.info("✅ 命中工具: [{}] (原始请求: {})", realName, targetName);
-                    resultJson = matchedTool.get().call(toolCall.arguments());
+                    log.info("✅ 命中工具: [{}]", realName);
+
+                    // 执行工具
+                    resultJson = matchedTool.get().call(args);
+
+                    // 📡 广播：工具执行结果
+                    // 如果结果太长（比如网页内容），可以在这里截断再发给前端，防止卡顿
+                    notify(AgentEvent.result(resultJson.length() > 500 ? resultJson.substring(0, 500) + "..." : resultJson));
 
                     // 刹车检测
-                    if ("terminate".equals(realName) || "TERMINATE_SIGNAL".equals(resultJson) || "TERMINATE_NOW".equals(resultJson)) {
-                        log.info("🛑 [优雅退场] 捕获到终止信号，CodeManus 任务完成。");
+                    if ("terminate".equals(realName) || "TERMINATE_SIGNAL".equals(resultJson) || "TERMINATE_NOW".equals(resultJson) || "TERMINATE_AGENT".equals(resultJson)) {
+                        log.info("🛑 [优雅退场] CodeManus 任务完成。");
                         this.setState(AgentState.FINISHED);
+
+                        // 提取最终原因作为 Answer
+                        String finalReason = args;
+                        try {
+                            JsonNode node = objectMapper.readTree(args);
+                            if (node.has("reason")) finalReason = node.get("reason").asText();
+                        } catch (Exception ignored) {}
+
+                        notify(AgentEvent.answer(finalReason));
+
                         throw new RuntimeException("TERMINATE_AGENT");
                     }
                 } else {
-                    log.warn("❌ 未找到工具: {}", targetName);
-                    String allToolNames = Arrays.stream(availableTools).map(FunctionCallback::getName).collect(Collectors.joining(", "));
-                    resultJson = "Error: Tool '" + targetName + "' not found. Available tools: [" + allToolNames + "]";
+                    resultJson = "Error: Tool '" + targetName + "' not found.";
+                    notify(AgentEvent.error(resultJson));
                 }
 
                 executionResults.add(String.format("工具 [%s] 结果: %s", targetName, resultJson));
@@ -138,6 +156,7 @@ public class ToolCallAgent extends ReActAgent {
             } catch (Exception e) {
                 if (isTerminationException(e)) throw (RuntimeException) e;
                 log.error("❌ 工具执行异常", e);
+                notify(AgentEvent.error("工具执行异常: " + e.getMessage()));
                 executionResults.add("Error: " + e.getMessage());
             }
         }
@@ -160,45 +179,30 @@ public class ToolCallAgent extends ReActAgent {
         return isTerminationException(e.getCause());
     }
 
-    // 🚨 核心升级：更强大的正则嗅探
     private boolean isFakeToolCall(String text) {
         if (text == null) return false;
-        // 只要包含 JSON 结构且里面有 name，就认为是工具调用
         return text.contains("{") && text.contains("}") && text.contains("\"name\"");
     }
 
-    // 🚨 核心升级：正则提取 JSON
     private List<AssistantMessage.ToolCall> parseFakeToolCalls(String text) {
         List<AssistantMessage.ToolCall> fakeCalls = new ArrayList<>();
         try {
-            // 使用正则匹配最外层的 JSON 对象 { ... "name": ... }
-            // 这个正则通过匹配成对的大括号来提取 JSON
-            // 简单版：提取第一个 { 到 最后一个 }
             int firstBrace = text.indexOf("{");
             int lastBrace = text.lastIndexOf("}");
-
             if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
                 String jsonString = text.substring(firstBrace, lastBrace + 1);
-
-                // 尝试解析
                 JsonNode node = objectMapper.readTree(jsonString);
-
-                // 必须包含 name 字段才算有效
                 if (node.has("name")) {
                     String name = node.get("name").asText();
                     String args = node.has("arguments") ? node.get("arguments").toString() : "{}";
-
-                    // 兼容旧的 file_path 参数
                     if (name.contains("read_file") && args.contains("file_path")) {
                         args = args.replace("file_path", "path");
                     }
-
                     fakeCalls.add(new AssistantMessage.ToolCall("manual_id_" + System.currentTimeMillis(), "function", name, args));
-                    log.info("🕵️ [兼容模式] 成功从文本提取 JSON: {} -> {}", name, args);
                 }
             }
         } catch (Exception e) {
-            log.warn("❌ 尝试从文本解析 JSON 失败: {}", e.getMessage());
+            log.warn("解析失败", e);
         }
         return fakeCalls;
     }

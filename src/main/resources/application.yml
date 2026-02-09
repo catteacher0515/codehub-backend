@@ -1,7 +1,7 @@
 server:
   port: 8125
   servlet:
-    context-path: /api  # 建议加上统一前缀，这样所有接口都会变成 /api/xxx，方便区分
+    context-path: # 建议加上统一前缀，这样所有接口都会变成 /api/xxx，方便区分
 
 spring:
   application:

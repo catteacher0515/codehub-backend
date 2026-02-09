@@ -12,7 +12,7 @@ import java.util.Arrays;
  * 智码 - Spring 容器侦探
  * 目标：查清 MCP 相关的 Bean 到底存在不存在，以及它们到底是什么类型。
  */
-@Component
+//@Component
 public class BeanDetectiveRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(BeanDetectiveRunner.class);
